@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_HOST=mysql
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=mina_db
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - mina-network
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - mina-network
+
+  mysql:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mina_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 20s
+      retries: 10
+    networks:
+      - mina-network
+
+  redis:
+    image: redis:7.0
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - mina-network
+
+networks:
+  mina-network:
+    driver: bridge
+
+volumes:
+  mysql_data:

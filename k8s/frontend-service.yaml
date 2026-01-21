@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: NodePort # Expose globally on host
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30000 # Fixed port for easier access
+  selector:
+    app: frontend
