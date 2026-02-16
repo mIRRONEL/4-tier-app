@@ -1,125 +1,83 @@
 # Project Mina
 
-A full-stack microservice application built with Node.js, React, MySQL, and Redis, designed for Kubernetes deployment with high availability and autoscaling.
+Project Mina is a high-performance, **4-tier full-stack application** designed for production-grade reliability, security, and horizontal scalability. It leverages Node.js, React, MySQL, and Redis to handle high volumes of data with sub-second response times.
 
-##  Tech Stack
+## 🏗️ Architecture
 
-*   **Frontend**: React, Vite, TailwindCSS
-*   **Backend**: Node.js, Express, Sequelize
-*   **Database**: MySQL 8.0
-*   **Cache**: Redis 7.0
-*   **DevOps**: Docker, Kubernetes (Kustomize), Nginx
+The system follows a modern microservices pattern optimized for Docker and Kubernetes:
 
-##  Features
+1.  **Ingress Layer**: Nginx-based Gateway for global traffic management and SSL termination.
+2.  **Frontend Layer**: React + Vite SPA, served via Nginx with automated token rotation.
+3.  **App Layer**: Scalable Node.js (Express) backend with Redis-backed session persistence.
+4.  **Data Layer**: High-availability MySQL (Persistence) and Redis (Caching & Session Store).
 
-*   **User Authentication**: JWT-based Signup and Login.
-*   **Item Management**: Create, Read, and Search items.
-*   **Caching**: Redis caching for high-performance search and retrieval.
-*   **Resilience**:
-    *   **Startup Dependencies**: Init containers ensure services start in order.
-    *   **Health Checks**: Liveness and Readiness probes for self-healing.
-*   **Scalability**:
-    *   Horizontal Pod Autoscaling (HPA) based on CPU usage.
-    *   Ingress (Cilium) for traffic routing.
+## 🚀 Key Features
 
-##  Local Development (Docker Compose)
+*   **⚡ High-Performance Caching**: Intelligent Redis implementation with configurable TTL for search and item retrieval.
+*   **📂 Global Pagination**: Backend-driven pagination for `GET` and `Search` routes, ensuring zero lag even with thousands of items.
+*   **🛡️ Automated Security**: 
+    *   **Auto-Secret Generation**: Built-in scripts to generate cryptographically secure JWT keys.
+    *   **Silent Session Refresh**: Automatic background token renewal using Refresh Tokens + Axios Interceptors.
+*   **⚖️ Horizontal Scaling**: Fully containerized and ready for `N+1` replicas with Nginx round-robin load balancing.
+*   **🛠️ Resiliency**: Init containers, formal healthchecks, and strict resource limits applied to all containers.
 
-The easiest way to run the app locally is using Docker Compose.
+## 🛠️ Getting Started (Local Development)
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/ronel11/project-mina.git
-    cd project-mina
-    ```
-
-2.  **Start the services**:
-    ```bash
-    docker-compose up --build
-    ```
-
-3.  **Access the application**:
-    *   Frontend: `http://localhost:5173`
-    *   Backend: `http://localhost:3000`
-
-##  Kubernetes Deployment
-
-This project is optimized for Kubernetes. All manifests are located in the `k8s/` directory and managed via Kustomize.
-
-### Prerequisites
-*   A Kubernetes cluster (Minikube, Docker Desktop, or Cloud Provider).
-*   `kubectl` installed and configured.
-*   (Optional) Metrics Server installed (for Autoscaling).
-
-### 1. Build & Push Images
-If you modify the code, you need to build and push the images to your registry (e.g., Docker Hub).
-
+### 1. Prerequisite Setup
+Clone the repo and initialize your secure environment:
 ```bash
-# Login
-docker login
+git clone https://github.com/ronel11/project-mina.git
+cd project-mina
 
-# Backend
-docker build -t ronel11/project-mina-backend:latest ./backend
-docker push ronel11/project-mina-backend:latest
-
-# Frontend
-docker build -t ronel11/project-mina-frontend:latest ./frontend
-docker push ronel11/project-mina-frontend:latest
+# Generate your secure JWT key
+node backend/scripts/generate-secret.js
 ```
 
-### 2. Deploy to Cluster
-Use Kustomize to apply all manifests (Deployments, Services, Secrets, Ingress, HPA) in one go.
+### 2. Environment Configuration
+Edit [`.env`](file:///.env) to customize your stack:
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `FRONTEND_URL` | `http://localhost:8080` | Required for CORS security |
+| `CACHE_TTL_ITEMS` | `3600` | Seconds to cache item lists |
+| `CACHE_TTL_SEARCH` | `300` | Seconds to cache search results |
 
+### 3. Launch the Stack
 ```bash
-kubectl apply -k k8s/
+docker-compose up -d --build
+```
+*   **Dashboard**: `http://localhost:8080`
+
+## 📈 Operations & Scaling
+
+### Scale Backend Replicas
+Scale your application logic horizontally with a single command:
+```bash
+docker-compose up -d --scale backend=3
 ```
 
-### 3. Accessing the App
-
-*   **Ingress**: The app is exposed via Ingress at `www.example.com`.
-    *   Add `127.0.0.1 www.example.com` to your `/etc/hosts` file to test locally.
-*   **NodePort**: Alternatively, access the frontend service via NodePort (check `kubectl get svc frontend`).
-
-### 4. Autoscaling
-The application includes Horizontal Pod Autoscalers (HPA).
-*   **Backend**: Scales 1-5 replicas (Target: 50% CPU)
-*   **Frontend**: Scales 1-5 replicas (Target: 20% CPU)
-
-To test autoscaling, run a load generator:
+### Monitor Performance
+Monitor resource consumption and container health:
 ```bash
-kubectl run -i --tty load-generator --rm --image=busybox --restart=Never -- /bin/sh -c "while sleep 0.01; do wget -q -O- http://frontend; done"
+docker stats
+docker-compose ps
 ```
 
-##  Project Structure
+### Run Load Tests
+Verify system stability under pressure using [k6](https://k6.io/):
+```bash
+docker run --rm -i --network project-mina_mina-network grafana/k6 run - <load-test/k6-script.js
+```
+
+## 📂 Project Structure
 
 ```
 Project-Mina/
-├── backend/                  # Node.js Express Service
-│   ├── src/                  # Application Source
-│   ├── Dockerfile
-│   └── package.json
-├── frontend/                 # React Vite Service
-│   ├── src/                  # Application Source
-│   ├── Dockerfile
-│   ├── package.json
-│   └── vite.config.js
-├── k8s/                      # Kubernetes Manifests
-│   ├── kustomization.yaml    # Resource Aggregator
-│   ├── ingress.yaml          # Ingress Rules (Cilium)
-│   ├── secrets.example.yaml  # Secret Template
-│   ├── configmap.yaml        # Env Variables
-│   ├── storageClass.yml      # Storage Config
-│   ├── backend-deployment.yaml
-│   ├── backend-service.yaml
-│   ├── backend-hpa.yaml
-│   ├── frontend-deployment.yaml
-│   ├── frontend-service.yaml
-│   ├── frontend-hpa.yaml
-│   ├── mysql-deployment.yaml
-│   ├── mysql-service.yaml
-│   ├── mysql-pvc.yaml
-│   ├── redis-deployment.yaml
-│   └── redis-service.yaml
-├── docker-compose.yml        # Local Development Orchestration
-├── .gitignore                # Git Ignore Rules
-└── README.md                 # Project Documentation
+├── backend/            # Express Service (Auth, Items, Search)
+│   ├── scripts/        # Automation & Maintenance scripts
+│   └── src/            # Business Logic & Middleware
+├── frontend/           # React SPA (AuthContext, Dashboard)
+├── ingress/            # Nginx Gateway & Load Balancer
+├── k8s/                # Kubernetes (HPA, Ingress, Deployments)
+├── load-test/          # k6 Stress Testing scripts
+└── docker-compose.yml  # Orchestration & Local Scale
 ```

@@ -1,61 +1,136 @@
 version: '3.8'
 
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   backend:
     build: ./backend
-    ports:
-      - "3000:3000"
+    init: true
+    restart: unless-stopped
     environment:
-      - PORT=3000
-      - DB_HOST=mysql
-      - DB_USER=user
-      - DB_PASSWORD=password
-      - DB_NAME=mina_db
-      - REDIS_URL=redis://redis:6379
+      - PORT=${PORT:-3000}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-mina_db}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - JWT_SECRET=${JWT_SECRET}
+      - CACHE_TTL_ITEMS=${CACHE_TTL_ITEMS:-3600}
+      - CACHE_TTL_SEARCH=${CACHE_TTL_SEARCH:-300}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8080}
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3000/', (res) => res.statusCode === 200 ? process.exit(0) : process.exit(1))" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - mina-network
+    logging: *default-logging
 
   frontend:
     build: ./frontend
-    ports:
-      - "5173:80"
+    init: true
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - mina-network
+    logging: *default-logging
+
+  ingress:
+    build: ./ingress
+    init: true
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      frontend:
+        condition: service_started
+    networks:
+      - mina-network
+    logging: *default-logging
 
   mysql:
     image: mysql:8.0
     command: --default-authentication-plugin=mysql_native_password
-    restart: always
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: mina_db
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-mina_db}
+      MYSQL_USER: ${DB_USER:-user}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       timeout: 20s
       retries: 10
     networks:
       - mina-network
+    logging: *default-logging
 
   redis:
     image: redis:7.0
-    restart: always
+    command: redis-server --appendonly yes
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - mina-network
+    logging: *default-logging
 
 networks:
   mina-network:
@@ -63,3 +138,4 @@ networks:
 
 volumes:
   mysql_data:
+  redis_data:

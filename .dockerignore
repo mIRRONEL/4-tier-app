@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+.agent/
+brain/
+k8s/
+README.md
+KUBERNETES.md
+node_modules
+npm-debug.log

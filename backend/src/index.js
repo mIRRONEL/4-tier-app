@@ -11,7 +11,11 @@ const seedAdminUser = require('./seeders/init');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.disable('x-powered-by');
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:8080',
+    credentials: true
+}));
 app.use(express.json());
 
 // Initialize connections
